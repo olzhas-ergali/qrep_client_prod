@@ -64,3 +64,9 @@ UniversalCallback = CallbackData(
     'universal',
     'action'
 )
+
+BonusHistoryCallback = CallbackData(
+    'bonus_history',
+    'page',
+    'action'
+)

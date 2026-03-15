@@ -6,7 +6,8 @@ from tgbot.keyboards.query_cb import (
     FaqCallback,
     OperatorCallback,
     AnswerCallback,
-    LocalCallback)
+    LocalCallback,
+    BonusHistoryCallback)
 from tgbot.data.faq_new import faq_lvls
 
 
@@ -153,5 +154,69 @@ def get_grade_btns():
             )
         ]
     )
+
+
+def get_bonus_history_btns(
+        current_page: int,
+        total_pages: int,
+        i18n_func: typing.Callable[[str], str],
+        locale: str = None
+) -> InlineKeyboardMarkup:
+    """Создаёт кнопки пагинации для истории бонусов."""
+    markup = InlineKeyboardMarkup(row_width=3)
+
+    buttons = []
+
+    # Кнопка "Назад" (если не первая страница)
+    if current_page > 1:
+        buttons.append(
+            InlineKeyboardButton(
+                text="◀️",
+                callback_data=BonusHistoryCallback.new(
+                    page=current_page - 1,
+                    action='page'
+                )
+            )
+        )
+
+    # Счётчик страниц
+    buttons.append(
+        InlineKeyboardButton(
+            text=f"{current_page}/{total_pages}",
+            callback_data=BonusHistoryCallback.new(
+                page=current_page,
+                action='current'
+            )
+        )
+    )
+
+    # Кнопка "Вперёд" (если не последняя страница)
+    if current_page < total_pages:
+        buttons.append(
+            InlineKeyboardButton(
+                text="▶️",
+                callback_data=BonusHistoryCallback.new(
+                    page=current_page + 1,
+                    action='page'
+                )
+            )
+        )
+
+    if buttons:
+        markup.row(*buttons)
+
+    # Кнопка "Главное меню"
+    markup.add(
+        InlineKeyboardButton(
+            text=i18n_func("Главное меню", locale=locale),
+            callback_data=FaqCallback.new(
+                chapter=0,
+                lvl='main',
+                action='faq'
+            )
+        )
+    )
+
+    return markup
 
 

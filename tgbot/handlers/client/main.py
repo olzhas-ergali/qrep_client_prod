@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from tgbot.models.database.users import Client
 from tgbot.models.database.cods import Cods
 from tgbot.misc.delete import remove
-from tgbot.keyboards.client.faq import get_faq_btns
+from tgbot.keyboards.client.faq import get_faq_btns, get_bonus_history_btns
 from tgbot.misc.generate import generate_code
 from tgbot.models.database.loyalty import ClientBonusPoints
 from tgbot.misc.state_helpers import clear_state_but_preserve_locale
@@ -97,7 +97,7 @@ async def start_handler(
     else:
         text = _("Уважаемый покупатель {name}, вас приветствует Qazaq Republic.\n\nПожалуйста, выберите одну из опций:").format(name=user.name)
     
-    btns = await get_faq_btns('main', _)
+    btns = await get_faq_btns('main', _, locale=user.local)
     
     await message.answer(
         text=text,
@@ -206,7 +206,7 @@ async def get_my_bonus_handler(
     logger.info(f"💰 BONUS_HANDLER: Шаблон сообщения: {text_template[:100]}...")
 
     text = text_template.format(cashback=available_bonus if available_bonus > 0 else 0, future_bonus=future_bonus)
-    btns = await get_faq_btns('main', _)
+    btns = await get_faq_btns('main', _, locale=user.local)
     
     await callback.message.edit_text(
         text=text,
@@ -227,3 +227,102 @@ async def get_my_bonus_handler(
 #         await callback.message.answer(
 #             text=_("У вас: {res} бонусов {msg}").format(res=res, msg=msg),
 #         )
+
+
+
+BONUS_HISTORY_PER_PAGE = 5
+
+
+async def get_bonus_history_handler(
+        callback: CallbackQuery,
+        session: AsyncSession,
+        user: Client,
+        state: FSMContext,
+        page: int = 1
+):
+    """Хендлер истории бонусов с пагинацией."""
+    _ = callback.bot.get('i18n')
+
+    await clear_state_but_preserve_locale(state)
+
+    # 1. Считаем баланс
+    client_bonuses = await ClientBonusPoints.get_all_by_client_id(session=session, client_id=user.id)
+    available_bonus = 0
+    if client_bonuses:
+        total_earned = sum(float(b.accrued_points or 0) for b in client_bonuses if b.activation_date.date() <= datetime.datetime.now().date())
+        total_spent = sum(float(b.write_off_points or 0) for b in client_bonuses)
+        available_bonus = int(total_earned - total_spent)
+
+    # 2. Получаем общее количество и историю с пагинацией
+    try:
+        total_count = await ClientBonusPoints.get_history_count(session, user.id)
+        total_pages = max(1, (total_count + BONUS_HISTORY_PER_PAGE - 1) // BONUS_HISTORY_PER_PAGE)
+
+        # Проверяем границы страницы
+        page = max(1, min(page, total_pages))
+        offset = (page - 1) * BONUS_HISTORY_PER_PAGE
+
+        history = await ClientBonusPoints.get_history_with_details(
+            session, user.id, limit=BONUS_HISTORY_PER_PAGE, offset=offset
+        )
+    except Exception as e:
+        logging.error(f"Ошибка получения истории бонусов: {e}")
+        return await callback.answer("Ошибка при получении истории")
+
+    # 3. Формируем текст
+    is_kaz = (user.local == 'kaz')
+
+    if is_kaz:
+        text = f"Сіздегі қазіргі бонус балансы: {available_bonus} бонус\n\nОперациялар:\n\n"
+    else:
+        text = f"Ваш текущий бонусный баланс: {available_bonus} бонусов\n\nИстория:\n\n"
+
+    if not history:
+        text += "Тарих бос." if is_kaz else "История пуста."
+
+    for row in history:
+        bonus = row.ClientBonusPoints
+        ticket_url = row.purchase_ticket or "—"
+        raw_date = row.purchase_date or bonus.operation_date
+        op_date = raw_date.strftime('%Y-%m-%d') if raw_date else "—"
+
+        if not is_kaz:
+            text += f"Дата покупки: {op_date}\n"
+            if bonus.write_off_points and bonus.write_off_points > 0:
+                text += f"Бонусы списаны: {int(bonus.write_off_points)}\n"
+            if bonus.accrued_points and bonus.accrued_points > 0:
+                text += f"Бонусы начислены: {int(bonus.accrued_points)}\n"
+            text += f"Ссылка на чек: {ticket_url}\n\n"
+        else:
+            text += f"Сатып алу күні: {op_date}\n"
+            if bonus.write_off_points and bonus.write_off_points > 0:
+                text += f"• Бонустар қолданылды: {int(bonus.write_off_points)}\n"
+            if bonus.accrued_points and bonus.accrued_points > 0:
+                text += f"• Бонустар қосылды: {int(bonus.accrued_points)}\n"
+            text += f"• Түбіртек сілтемесі: {ticket_url}\n\n"
+
+    # 4. Кнопки с пагинацией
+    btns = get_bonus_history_btns(page, total_pages, _, locale=user.local)
+
+    try:
+        await callback.message.edit_text(text=text, reply_markup=btns, disable_web_page_preview=True)
+    except:
+        await callback.message.answer(text=text, reply_markup=btns, disable_web_page_preview=True)
+
+
+async def bonus_history_page_handler(
+        callback: CallbackQuery,
+        callback_data: dict,
+        session: AsyncSession,
+        user: Client,
+        state: FSMContext
+):
+    """Хендлер переключения страниц истории бонусов."""
+    action = callback_data.get('action')
+
+    if action == 'current':
+        # Просто нажали на счётчик страниц - ничего не делаем
+        return await callback.answer()
+
+    page = int(callback_data.get('page', 1))
+    await get_bonus_history_handler(callback, session, user, state, page=page)

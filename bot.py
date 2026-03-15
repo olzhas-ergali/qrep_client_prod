@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import os
 
 from aiogram import Bot, Dispatcher
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
@@ -16,6 +17,10 @@ from tgbot.middlewares.db import DbMiddleware
 from tgbot.middlewares.locale import ACLMiddleware
 from tgbot.misc.job import tasks
 from tgbot import handlers
+
+# --- ИМПОРТ НОВОГО СЛУШАТЕЛЯ ---
+from tgbot.services.db_listener import DBListener
+# -------------------------------
 
 logger = logging.getLogger(__name__)
 
@@ -41,10 +46,12 @@ async def main():
     logging.basicConfig(
         level=logging.INFO,
         format=u'%(filename)s:%(lineno)d #%(levelname)-8s [%(asctime)s] - %(name)s - %(message)s',
-
     )
     logger.info("Starting bot")
-    config = load_config(".env")
+    env_path = os.getenv("ENV_FILE", ".env")
+    logger.info("Using env file: %s", env_path)
+    config = load_config(env_path)
+    
     if config.tg_bot.use_redis:
         storage = RedisStorage2(config.tg_bot.redis_host)
     else:
@@ -56,6 +63,7 @@ async def main():
     scheduler = AsyncIOScheduler(
         timezone='Asia/Aqtobe'
     )
+    
     await db.create_pool(
         URL(
             drivername="postgresql+asyncpg",
@@ -69,14 +77,19 @@ async def main():
     )
 
     dp = Dispatcher(bot, storage=storage)
-    # redis = await storage.redis()
 
     i18n = register_all_middlewares(dp)
     bot['i18n'] = i18n.gettext
     bot['storage'] = storage
-
     bot['config'] = config
     bot['pool'] = db.pool
+
+    # --- ЗАПУСК DB LISTENER (ТРИГГЕРЫ) ---
+    # Создаем экземпляр слушателя и запускаем его в фоновой задаче
+    # Это обеспечит мгновенную реакцию на изменения в базе
+    db_listener = DBListener(config, db.pool)
+    asyncio.create_task(db_listener.start())
+    # -------------------------------------
 
     scheduler.add_job(
         tasks.push_client_authorization,
@@ -90,34 +103,10 @@ async def main():
     scheduler.add_job(
         tasks.push_client_answer_operator,
         'interval',
-        minutes=5,  # Каждые 5 минут для тестирования
+        minutes=5,
         args=(db.pool, config, i18n.gettext)
     )
 
-    # scheduler.add_job(
-    #     tasks.push_client_about_bonus,
-    #     'cron',
-    #     hour=10,
-    #     minute=00,
-    #     args=(db.pool, bot),
-    #
-    # )
-    # scheduler.add_job(
-    #     tasks.push_client_about_bonus,
-    #     'interval',
-    #     minutes=1,
-    #     args=(db.pool, bot),
-    # )
-    # scheduler.add_job(
-    #     staff_task.push_staff_about_dismissal,
-    #     'cron',
-    #     hour=10,
-    #     minute=00,
-    #     args=(db.pool, bot)
-    # )
-    # bot['redis'] = redis
-
-    # register_all_middlewares(dp)
     register_all_filters(dp)
     register_all_handlers(dp)
 
@@ -126,17 +115,7 @@ async def main():
         f'starting bot: @{bot_me.username}'
     )
 
-    # start
     try:
-        # arr = ['371683935', '398864433', '412249576',
-        #       '428917660', '483200140', '564023521',
-        #       '875863049', '1006269986', '5551195067',
-        #       '6845418199']
-        # for i in arr:
-        #    try:
-        #        await bot.send_message(i, "Функционал бота обновлен, нажмите /start")
-        #    except:
-        #        pass
         scheduler.start()
         await dp.start_polling()
     finally:

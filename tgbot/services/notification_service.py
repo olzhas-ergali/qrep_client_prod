@@ -41,48 +41,48 @@ class UserIdentificationService:
     
     async def identify_user(self, phone_number: str) -> UserInfo:
         """
-        Определяет тип пользователя по приоритету:
-        1. Staff table by phone
-        2. Client table by phone
+        Определяет тип пользователя.
+        ПРИОРИТЕТ ИЗМЕНЕН: Сначала ищем Клиента, так как это уведомления о покупках.
+        1. Client table by phone
+        2. Staff table by phone
         3. Unknown user
         """
         logger.info(f"Identifying user for phone: {phone_number}")
         
-        # Сначала ищем в таблице сотрудников
         normalized_phone = parse_phone(phone_number)
         
-        staff_user = await User.get_by_phone(self.session, normalized_phone)
-        if staff_user:
-            display_name = staff_user.login_tg or f"User_{staff_user.id}" 
-            logger.info(f"✅ Found STAFF user: {display_name} (ID: {staff_user.id}, Local: {staff_user.local})")
-            return UserInfo(
-                user_type=UserType.STAFF,
-                phone_number=phone_number,
-                name=display_name,
-                user_id=staff_user.id,
-                locale=staff_user.local or 'rus' # Берем язык из БД
-            )
-        
-        # Затем ищем в таблице клиентов
+        # 1. СНАЧАЛА ищем в таблице КЛИЕНТОВ
         client_user = await Client.get_client_by_phone(self.session, normalized_phone)
         if client_user:
-            logger.info(f"Found CLIENT user: {client_user.name} (ID: {client_user.id}, Local: {client_user.local})")
+            logger.info(f"✅ Found CLIENT user: {client_user.name} (ID: {client_user.id}, Local: {client_user.local})")
             return UserInfo(
                 user_type=UserType.CLIENT,
                 phone_number=phone_number,
                 name=client_user.name,
                 user_id=client_user.id,
-                locale=client_user.local or 'rus' # Берем язык из БД
+                locale=client_user.local or 'rus'
             )
         
-        # Пользователь не найден
+        # 2. Если не нашли, ищем в таблице СОТРУДНИКОВ
+        staff_user = await User.get_by_phone(self.session, normalized_phone)
+        if staff_user:
+            display_name = staff_user.login_tg or f"User_{staff_user.id}" 
+            logger.info(f"Found STAFF user (fallback): {display_name} (ID: {staff_user.id}, Local: {staff_user.local})")
+            return UserInfo(
+                user_type=UserType.STAFF,
+                phone_number=phone_number,
+                name=display_name,
+                user_id=staff_user.id,
+                locale=staff_user.local or 'rus'
+            )
+        
+        # 3. Пользователь не найден
         logger.warning(f"User NOT FOUND for phone: {phone_number} - will use UNKNOWN type")
         return UserInfo(
             user_type=UserType.UNKNOWN,
             phone_number=phone_number,
             locale='rus'
         )
-
 
 class NotificationService:
     """Сервис для отправки уведомлений в соответствующие боты"""
@@ -94,11 +94,16 @@ class NotificationService:
         token = ""
         if user_type == UserType.STAFF:
             token = self.config.tg_bot.staff_token
+            logger.info(f"Using STAFF bot token for user_type={user_type.value}")
         elif user_type == UserType.CLIENT:
             token = self.config.tg_bot.client_token
+            logger.info(f"Using CLIENT bot token for user_type={user_type.value}")
         else:
-            token = self.config.tg_bot.staff_token
-        
+            # Для UNKNOWN используем client_token, так как purchase-notification
+            # предназначен для клиентов, а не для сотрудников
+            token = self.config.tg_bot.client_token
+            logger.info(f"Using CLIENT bot token (fallback) for user_type={user_type.value}")
+
         return token
     
     async def send_notification(
@@ -202,18 +207,17 @@ class NotificationService:
         # 2. Получаем переводчик для этого языка
         _ = self._get_translator(user_info.locale)
         
-        # 3. Формируем сообщение на нужном языке
-        name_to_use = user_info.name if user_info.name else ""
+        # 3. Формируем сообщение по ТЗ (рус.: Здравствуйте, {ФИО}! Благодарим за покупку! ... / каз.: Сәлеметсіз бе, {ФИО}! Бізді таңдағаныңыз үшін рахмет! ...)
+        name_to_use = (user_info.name or "").strip()
         
         if user_info.user_type == UserType.STAFF:
-             greeting = _('Greeting_Staff').format(name=name_to_use or 'қызметкер/сотрудник')
+            greeting = _('Greeting_Staff').format(name=name_to_use or 'қызметкер/сотрудник')
         else:
-             greeting = _('Greeting_Client').format(name=name_to_use or 'клиент')
+            greeting = _('Greeting_Client').format(name=name_to_use or 'клиент')
 
         message = f"{greeting}\n\n{_('Body')}"
         
         if purchase_id:
-            # Форматирование ID покупки если нужно
             id_text = _('ID').format(id=purchase_id)
             message += id_text
 

@@ -24,48 +24,70 @@ async def push_client_authorization(
         config: Config,
         _: typing.Callable,
 ):
-    logging.info("Уведомление для клиентов, которые не закончили регистрацию")
+    logging.info("TASK: Уведомление о незавершенной регистрации (строгая проверка)")
     session: AsyncSession = pool()
     notification_service = NotificationService(config)
     
+    # Ищем тех, кто "висит" больше 3 минут
     now = datetime.now() - timedelta(minutes=3)
+    
     response = await session.execute(select(RegTemp).where(
         (RegTemp.state_time < now) & (RegTemp.state != 'start'))
     )
-    users: typing.Optional[typing.List, None] = response.scalars().all()
+    users: typing.Optional[typing.List[RegTemp], None] = response.scalars().all()
 
     for u in users:
-        # --- НАЧАЛО ИСПРАВЛЕНИЯ ---
-        # Проверяем, есть ли уже такой активный клиент
-        exist_client = await session.get(Client, u.telegram_id)
+        # Получаем данные из JSON (чтобы достать телефон и флаг отправки)
+        current_data = dict(u.state_data) if u.state_data else {}
+        phone_in_temp = current_data.get('phone')
+
+        # --- ЭТАП 1: ЖЕСТКАЯ ПРОВЕРКА НА УЖЕ ЗАРЕГИСТРИРОВАННЫХ ---
         
-        if exist_client and exist_client.is_active:
-            logging.info(f"User {u.telegram_id} уже зарегистрирован. Удаляем зависшую запись RegTemp.")
+        # 1.1 Проверка по Telegram ID
+        exist_client_by_id = await session.get(Client, u.telegram_id)
+        if exist_client_by_id and exist_client_by_id.is_active:
+            logging.info(f"User {u.telegram_id} уже есть в базе (по ID). Удаляем мусор из RegTemp.")
             await session.delete(u)
-            continue # Пропускаем отправку сообщения
-        # --- КОНЕЦ ИСПРАВЛЕНИЯ ---
+            continue
+
+        # 1.2 Проверка по Телефону (если он был введен)
+        if phone_in_temp:
+            # Используем существующий метод модели Client
+            exist_client_by_phone = await Client.get_client_by_phone(session, phone_in_temp)
+            if exist_client_by_phone and exist_client_by_phone.is_active:
+                logging.info(f"User {u.telegram_id} (phone: {phone_in_temp}) уже есть в базе. Удаляем мусор из RegTemp.")
+                await session.delete(u)
+                continue
+
+        # --- ЭТАП 2: ОТПРАВКА УВЕДОМЛЕНИЯ (ТОЛЬКО 1 РАЗ) ---
+
+        # Если мы уже отправляли уведомление этому юзеру — пропускаем его
+        if current_data.get('is_notified') is True:
+            continue
 
         try:
-            # Для незарегистрированных пользователей отправляем в client bot по умолчанию
-            # Так как они еще не имеют phone_number для идентификации
             from tgbot.services.notification_service import UserInfo, UserType
             user_info = UserInfo(user_type=UserType.CLIENT)
             
-            await notification_service.send_notification(
+            # Отправляем сообщение
+            success = await notification_service.send_notification(
                 user_info=user_info,
                 telegram_id=u.telegram_id,
-                message="Вы не закончили регистрацию"
+                message="Вы не закончили регистрацию",
+                reply_markup=get_continue_btn(_)
             )
             
-            # Опционально: можно удалить запись или обновить время, 
-            # чтобы не спамить пользователю каждые несколько минут
-            # u.state_time = datetime.now() 
-            # session.add(u)
+            # Если отправилось успешно — ставим метку
+            if success:
+                current_data['is_notified'] = True
+                u.state_data = current_data
+                session.add(u)
+                logging.info(f"Напоминание отправлено {u.telegram_id}. Ставим флаг и забиваем.")
             
         except Exception as e:
-            logging.error(f"Failed to send registration reminder to {u.telegram_id}: {e}")
+            logging.error(f"Error sending auth push to {u.telegram_id}: {e}")
 
-    await session.commit() # Не забываем закоммитить удаление RegTemp
+    await session.commit()
     await session.close()
 
 

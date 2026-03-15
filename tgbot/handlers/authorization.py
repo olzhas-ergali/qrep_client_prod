@@ -25,8 +25,7 @@ async def first_message_handler(
 Я помогу вам быстро получить информацию о кэшбэке и многом другом.'''
     )
     await message.answer(
-        text="Тілді таңдаңыз:\n"
-             "Выберите язык:",
+        text="Тілді таңдаңыз:\nВыберите язык:\n\nҚазақ тілі\nРусский язык",
         reply_markup=get_local_btns()
     )
 

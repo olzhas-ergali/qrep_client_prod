@@ -2,6 +2,7 @@ from aiogram import types
 from aiogram.dispatcher.dispatcher import Dispatcher
 from tgbot.handlers.client import faq, show_purchases, main
 from tgbot.keyboards import query_cb
+from tgbot.keyboards.query_cb import BonusHistoryCallback
 from tgbot.misc.states.client import FaqState
 
 
@@ -10,6 +11,19 @@ def register_faq_function(dp: Dispatcher):
         faq.main.faq_lvl_handler,
         query_cb.FaqCallback.filter(action='faq'),
         state="*"
+    )
+
+    dp.register_callback_query_handler(
+        main.get_bonus_history_handler,
+        query_cb.FaqCallback.filter(action='client', lvl='bonus_history'),
+        state='*'
+    )
+
+    # Пагинация истории бонусов
+    dp.register_callback_query_handler(
+        main.bonus_history_page_handler,
+        BonusHistoryCallback.filter(),
+        state='*'
     )
 
     dp.register_callback_query_handler(

@@ -67,6 +67,7 @@ faq_texts_update = {
 faq_lvls = {
     'main': [
         {"text": "Мой баланс", 'callback': 'bonus', 'action': 'client'},
+        {"text": "История бонусов", 'callback': 'bonus_history', 'action': 'client'},
         {"text": "Мой QR-код", 'callback': 'qr', 'action': 'client'},
         {"text": "Мои покупки", 'callback': 'purchase', 'action': 'client'},
         {"text": "QR+ (Как работает бонусная программа?)", 'callback': 'lvl4'},

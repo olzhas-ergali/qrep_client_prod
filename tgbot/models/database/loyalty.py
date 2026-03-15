@@ -7,6 +7,8 @@ from sqlalchemy import (Column, Integer, BigInteger, ForeignKey, Text, DateTime,
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tgbot.models.database.base import Base
+from sqlalchemy.orm import relationship
+from tgbot.models.database.purchases import ClientPurchase, ClientPurchaseReturn
 
 
 class ClientBonusPoints(Base):
@@ -85,6 +87,53 @@ class ClientBonusPoints(Base):
 
         return response.scalars().all()
 
+    @classmethod
+    async def get_history_with_details(
+            cls,
+            session: AsyncSession,
+            client_id: int,
+            limit: int = 5,
+            offset: int = 0
+    ):
+        """
+        Получает историю бонусов (только покупки, без возвратов).
+        """
+        stmt = select(
+            ClientBonusPoints,
+            ClientPurchase.ticket_print_url.label('purchase_ticket'),
+            ClientPurchase.created_date.label('purchase_date')
+        ).outerjoin(
+            ClientPurchase,
+            ClientBonusPoints.client_purchases_id == ClientPurchase.id
+        ).where(
+            and_(
+                ClientBonusPoints.client_id == client_id,
+                ClientBonusPoints.client_purchases_return_id.is_(None)  # Исключаем возвраты
+            )
+        ).order_by(
+            desc(ClientBonusPoints.operation_date)
+        ).limit(limit).offset(offset)
+
+        response = await session.execute(stmt)
+        return response.all()
+
+    @classmethod
+    async def get_history_count(
+            cls,
+            session: AsyncSession,
+            client_id: int
+    ) -> int:
+        """Получает количество записей истории бонусов (без возвратов)."""
+        from sqlalchemy import func as sql_func
+        stmt = select(sql_func.count()).select_from(ClientBonusPoints).where(
+            and_(
+                ClientBonusPoints.client_id == client_id,
+                ClientBonusPoints.client_purchases_return_id.is_(None)  # Исключаем возвраты
+            )
+        )
+        response = await session.execute(stmt)
+        return response.scalar() or 0
+    
 
 class BonusExpirationNotifications(Base):
     __tablename__ = 'bonus_expiration_notifications'

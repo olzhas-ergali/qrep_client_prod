@@ -5,6 +5,7 @@ from aiogram.dispatcher.storage import FSMContext
 from tgbot.keyboards.client.faq import get_faq_btns
 from tgbot.keyboards.client.client import change_locale
 from tgbot.data.faq_new import faq_texts_update, tags
+from tgbot.data.faq_translations import get_faq_text, FAQ_TRANSLATIONS
 from tgbot.misc.states.client import FaqState
 from tgbot.models.database.users import Client
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,20 +37,26 @@ async def faq_lvl_handler(
 
     await clear_state_but_preserve_locale(state)
 
+    # Получаем язык пользователя из FSM
+    state_data = await state.get_data()
+    user_locale = state_data.get('session_locale', 'rus')
+
     if not text:
         lvl = callback_data.get('lvl').replace('*', callback_data.get('chapter'))
-        
-        # --- ИСПРАВЛЕННАЯ ЛОГИКА ---
-        # 1. Получаем оригинальный текст-ключ из словаря
-        original_text = faq_texts_update.get(lvl)
-        
-        # 2. Переводим текст прямо здесь, если он найден. Иначе - текст по умолчанию.
-        if original_text:
-            text = _(original_text)
+
+        # --- НОВАЯ ЛОГИКА: используем простой словарь переводов ---
+        # Проверяем есть ли перевод в новой системе (для lvl6_* ключей)
+        if lvl in FAQ_TRANSLATIONS:
+            text = get_faq_text(lvl, user_locale)
         else:
-            text = _("Пожалуйста, выберите одну из опций:")
-        # --- КОНЕЦ ИСПРАВЛЕНИЯ ---
-            
+            # Fallback на старую систему для остальных ключей
+            original_text = faq_texts_update.get(lvl)
+            if original_text:
+                text = _(original_text)
+            else:
+                text = _("Пожалуйста, выберите одну из опций:")
+        # --- КОНЕЦ НОВОЙ ЛОГИКИ ---
+
         if 'operator' in callback_data.get('lvl'):
             # Текст для оператора берется так же, но из другого ключа
             text = _(faq_texts_update.get('operator'))

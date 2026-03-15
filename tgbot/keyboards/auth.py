@@ -6,6 +6,7 @@ def get_auth_btns(
         _,
         local: str
 ):
+    """Только клиентская авторизация — кнопка «сотрудник» в клиентском боте не показываем."""
     markup = InlineKeyboardMarkup(row_width=1)
     btn1 = InlineKeyboardButton(
         text=_("Авторизоваться как клиент", locale=local),
@@ -14,16 +15,7 @@ def get_auth_btns(
             action='auth'
         )
     )
-
-    btn2 = InlineKeyboardButton(
-        text=_("Авторизоваться как сотрудник", locale=local),
-        callback_data=AuthCallback.new(
-            id='staff',
-            action='auth'
-        )
-    )
-
-    markup.add(btn1, btn2)
+    markup.add(btn1)
     return markup
 
 

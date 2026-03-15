@@ -84,13 +84,14 @@ async def all_purchases_handler(
     else:
         logger.info(f"🛒 ALL_PURCHASES_HANDLER: Покупки не найдены, отправляем сообщение об отсутствии")
         try:
-            no_purchases_text = _("Вы пока не совершали покупки в нашем магазине.\nПредлагаем вам просмотреть ассортимент на сайте - qazaqrepublic.com")
-            await callback.message.answer(text=no_purchases_text)
+            no_purchases_text = _("Вы пока не совершали покупки в нашем магазине.\nПредлагаем вам просмотреть ассортимент на сайте — <a href=\"https://qazaqrepublic.com\">qazaqrepublic.com</a>")
+            await callback.message.answer(text=no_purchases_text, parse_mode=ParseMode.HTML)
             logger.info(f"🛒 ALL_PURCHASES_HANDLER: Сообщение об отсутствии покупок отправлено")
         except Exception as e:
             logger.error(f"🛒 ALL_PURCHASES_HANDLER: Ошибка отправки сообщения об отсутствии: {e}")
             await callback.message.answer(
-                text="Вы пока не совершали покупки в нашем магазине.\nПредлагаем вам просмотреть ассортимент на сайте - qazaqrepublic.com"
+                text="Вы пока не совершали покупки в нашем магазине.\nПредлагаем вам просмотреть ассортимент на сайте — <a href=\"https://qazaqrepublic.com\">qazaqrepublic.com</a>",
+                parse_mode=ParseMode.HTML
             )
     
     logger.info(f"🛒 ALL_PURCHASES_HANDLER: Переходим к главному меню")
@@ -135,13 +136,14 @@ async def purchases_by_date_handler(
     else:
         logger.info(f"🛒 PURCHASES_BY_DATE_HANDLER: Покупки за месяц не найдены")
         try:
-            no_purchases_text = _("Вы пока не совершали покупки за этот месяц.\nПредлагаем вам просмотреть ассортимент на сайте - qazaqrepublic.com")
-            await callback.message.answer(text=no_purchases_text)
+            no_purchases_text = _("Вы пока не совершали покупки в нашем магазине за этот месяц.\nПредлагаем вам просмотреть ассортимент на сайте — <a href=\"https://qazaqrepublic.com\">qazaqrepublic.com</a>")
+            await callback.message.answer(text=no_purchases_text, parse_mode=ParseMode.HTML)
             logger.info(f"🛒 PURCHASES_BY_DATE_HANDLER: Сообщение об отсутствии покупок за месяц отправлено")
         except Exception as e:
             logger.error(f"🛒 PURCHASES_BY_DATE_HANDLER: Ошибка отправки сообщения об отсутствии: {e}")
             await callback.message.answer(
-                text="Вы пока не совершали покупки за этот месяц.\nПредлагаем вам просмотреть ассортимент на сайте - qazaqrepublic.com"
+                text="Вы пока не совершали покупки в нашем магазине за этот месяц.\nПредлагаем вам просмотреть ассортимент на сайте — <a href=\"https://qazaqrepublic.com\">qazaqrepublic.com</a>",
+                parse_mode=ParseMode.HTML
             )
     
     logger.info(f"🛒 PURCHASES_BY_DATE_HANDLER: Переходим к главному меню")

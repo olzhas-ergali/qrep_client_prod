@@ -59,6 +59,37 @@ async def auth_fio_handler(
         phone_number = parse_phone(message.contact.phone_number)
     except:
         phone_number = reg.state_data.get('phone')
+
+    # Проверяем, является ли пользователь сотрудником
+    # Исключение для тестового номера
+    TEST_PHONE_EXCLUDE = "77752415853"
+    staff_user = await User.get_by_phone(session=session, phone=phone_number)
+    if staff_user and phone_number != TEST_PHONE_EXCLUDE:
+        # Получаем язык пользователя из состояния FSM
+        state_data = await state.get_data()
+        user_locale = state_data.get('session_locale', 'rus')
+
+        if user_locale == 'kaz':
+            staff_message = (
+                "Сіз <b>Qazaq Republic</b> компаниясының қызметкерісіз. "
+                "Тапсырысты рәсімдеуді жалғастыру үшін "
+                "<a href='https://t.me/qrep1465bot'>@qrep1465bot</a> ботына өтуді сұраймыз. "
+                "Саудаңыз сәтті өтсін!"
+            )
+        else:
+            staff_message = (
+                "Вы являетесь сотрудником компании <b>Qazaq Republic</b>. "
+                "Просим перейти в бот <a href='https://t.me/qrep1465bot'>@qrep1465bot</a> "
+                "для дальнейших шагов по оформлению заказа. Желаем вам приятных покупок!"
+            )
+
+        await message.answer(staff_message, parse_mode="HTML")
+        await state.finish()
+        # Восстанавливаем session_locale после finish
+        if user_locale:
+            await state.update_data(session_locale=user_locale)
+        return
+
     if client := await Client.get_client_by_phone(
         session=session,
         phone=phone_number
@@ -170,6 +201,7 @@ async def auth_get_other_year_handler(
         state: FSMContext,
         callback_data: dict
 ):
+    await query.answer()
     year = int(callback_data.get('id').split(',')[1])
     kb = await make_year_ikb(year)
     await query.message.edit_reply_markup(reply_markup=kb)
@@ -182,6 +214,7 @@ async def auth_birthday_date_handler(
         state: FSMContext,
         callback_data: dict
 ):
+    await query.answer()
     _ = query.bot.get("i18n")
     year = int(callback_data.get('id'))
     month = datetime.datetime.now().month
@@ -207,6 +240,7 @@ async def auth_get_other_month_handler(
         callback_data: dict,
         state: FSMContext # ИЗМЕНЕНИЕ: Добавляем state
 ):
+    await query.answer()
     month = int(callback_data.get('id').split(',')[1])
     year = int(callback_data.get('id').split(',')[2])
     if not month:
@@ -233,6 +267,7 @@ async def auth_gender_handler(
         callback_data: dict,
         reg: RegTemp
 ):
+    await query.answer()
     _ = query.bot.get("i18n")
     if not reg.state_data.get('birthday'):
         birthday = callback_data.get('id').replace('date,', "")
