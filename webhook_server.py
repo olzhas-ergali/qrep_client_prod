@@ -6,12 +6,15 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from tgbot.config import load_config
 from tgbot.webhooks.purchase_webhook import PurchaseWebhookHandler, setup_webhook_routes
 
-# Настройка логирования
+# Настройка логирования (в logs/ для совместимости с systemd и правами)
+import os
+_log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+os.makedirs(_log_dir, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler("webhook_server.log"),
+        logging.FileHandler(os.path.join(_log_dir, "webhook_server.log")),
         logging.StreamHandler()
     ]
 )
