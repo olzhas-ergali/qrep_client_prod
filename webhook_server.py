@@ -61,6 +61,7 @@ async def init_app():
 
 def main():
     """Основная функция запуска сервера"""
+    port = int(os.environ.get("WEBHOOK_PORT", "8080"))
     logger.info("Starting webhook server...")
     
     app = asyncio.get_event_loop().run_until_complete(init_app())
@@ -69,7 +70,7 @@ def main():
     web.run_app(
         app,
         host='0.0.0.0',
-        port=8080,
+        port=port,
         access_log=logger
     )
 
