@@ -1168,15 +1168,15 @@ msgid ""
 "Предлагаем вам просмотреть ассортимент на сайте — <a href=\"https://qazaqrepublic.com\">qazaqrepublic.com</a>"
 msgstr ""
 "Сіз әлі біздің дүкеннен сауда жасамадыңыз.\n"
-"Сайттағы тауарлармен танысып шығуыңызды ұсынамыз — <a href=\"https://qazaqrepublic.com\">qazaqrepublic.com</a>"
+"Сайттағы тауарлармен танысып шығуды ұсынамыз — <a href=\"https://qazaqrepublic.com\">qazaqrepublic.com</a>"
 
 #: handlers/client/show_purchases.py
 msgid ""
 "Вы пока не совершали покупки в нашем магазине за этот месяц.\n"
 "Предлагаем вам просмотреть ассортимент на сайте — <a href=\"https://qazaqrepublic.com\">qazaqrepublic.com</a>"
 msgstr ""
-"Сіз әлі біздің дүкеннен осы айда сауда жасаған жоқсыз.\n"
-"Сайттағы ассортиментті қарауды ұсынамыз — <a href=\"https://qazaqrepublic.com\">qazaqrepublic.com</a>"
+"Сіз әлі біздің дүкеннен осы айда сауда жасамадыңыз.\n"
+"Сайттағы тауарлармен танысып шығуды ұсынамыз — <a href=\"https://qazaqrepublic.com\">qazaqrepublic.com</a>"
 
 #: handlers/client/faq/main.py:72 handlers/staff/show_purchases.py:184
 msgid "Вы сменили язык"
@@ -1492,6 +1492,10 @@ msgstr ""
 
 #: handlers/client/auth.py:215
 msgid "Отлично! Пожалуйста, укажите пол:"
+msgstr "Жынысыңызды көрсетуіңізді сұраймыз:"
+
+#: handlers/client/auth.py:277
+msgid "Отлично! Пожалуйста, укажите пол (ж - женский, м - мужской):"
 msgstr "Жынысыңызды көрсетуіңізді сұраймыз:"
 
 #: handlers/staff/probation_period/second.py:38

@@ -137,8 +137,8 @@ async def auth_fio_handler(
         await session.commit()
         await remove(message, 1)
         await message.answer(
-            _("Чтобы зарегистрироваться в программе лояльности QR+, пожалуйста, "
-              "ответьте на несколько вопросов. Это займёт не более минуты 😊")
+            _("Чтобы зарегистрироваться в бонусной программе QR+, пожалуйста, "
+              "ответьте на несколько вопросов — это займёт не более минуты.")
         )
 
         await message.answer(
@@ -183,7 +183,7 @@ async def get_years_handler(
 
     year = datetime.datetime.now().year
     await message.answer(
-        text=_("Благодарим! Укажите дату рождения:"),
+        text=_("Благодарим! Укажите дату рождения (пример - 15.04.2000):"),
         reply_markup=await make_year_ikb(year)
     )
     await AuthClientState.waiting_birthday_date.set()
@@ -274,7 +274,7 @@ async def auth_gender_handler(
         await state.update_data(birthday=birthday.replace(",", "."))
     # Текст на русском с переводом через .po файл
     await query.message.edit_text(
-        text=_("Отлично! Пожалуйста, укажите пол:"),
+        text=_("Отлично! Пожалуйста, укажите пол (ж - женский, м - мужской):"),
         reply_markup=await get_genders_ikb(_)
     )
     await AuthClientState.waiting_gender.set()

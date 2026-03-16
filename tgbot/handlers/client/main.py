@@ -93,7 +93,7 @@ async def start_handler(
     
     # Формируем приветствие в зависимости от того, новый ли это пользователь
     if is_new_user:
-        text = _("Спасибо! Регистрация завершена.\nВы стали участником программы QR+ и теперь получаете 5% кэшбека с каждой покупки.\nВаш персональный QR-код и информация о кэшбеке доступны в меню.\n\nПожалуйста, выберите одну из опций:")
+        text = _("Спасибо! Регистрация завершена.\nВы стали участником программы QR+ и теперь получаете 5% кэшбэка с каждой покупки.\nВаш персональный QR-код и информация о кэшбэке доступны в меню.\n\nПожалуйста, выберите одну из опций:")
     else:
         text = _("Уважаемый покупатель {name}, вас приветствует Qazaq Republic.\n\nПожалуйста, выберите одну из опций:").format(name=user.name)
     
@@ -282,9 +282,16 @@ async def get_bonus_history_handler(
 
     for row in history:
         bonus = row.ClientBonusPoints
-        ticket_url = row.purchase_ticket or "—"
+        ticket_url = (row.purchase_ticket or "").strip()
         raw_date = row.purchase_date or bonus.operation_date
         op_date = raw_date.strftime('%Y-%m-%d') if raw_date else "—"
+        # Кликабельная ссылка, если пришла из API; иначе — пояснение
+        if ticket_url and (ticket_url.startswith("http://") or ticket_url.startswith("https://")):
+            ticket_display = f'<a href="{ticket_url}">Чек</a>'
+        elif ticket_url:
+            ticket_display = ticket_url
+        else:
+            ticket_display = "Не указана"
 
         if not is_kaz:
             text += f"Дата покупки: {op_date}\n"
@@ -292,22 +299,26 @@ async def get_bonus_history_handler(
                 text += f"Бонусы списаны: {int(bonus.write_off_points)}\n"
             if bonus.accrued_points and bonus.accrued_points > 0:
                 text += f"Бонусы начислены: {int(bonus.accrued_points)}\n"
-            text += f"Ссылка на чек: {ticket_url}\n\n"
+            text += f"Ссылка на чек: {ticket_display}\n\n"
         else:
             text += f"Сатып алу күні: {op_date}\n"
             if bonus.write_off_points and bonus.write_off_points > 0:
                 text += f"• Бонустар қолданылды: {int(bonus.write_off_points)}\n"
             if bonus.accrued_points and bonus.accrued_points > 0:
                 text += f"• Бонустар қосылды: {int(bonus.accrued_points)}\n"
-            text += f"• Түбіртек сілтемесі: {ticket_url}\n\n"
+            text += f"• Түбіртек сілтемесі: {ticket_display}\n\n"
 
     # 4. Кнопки с пагинацией
     btns = get_bonus_history_btns(page, total_pages, _, locale=user.local)
 
     try:
-        await callback.message.edit_text(text=text, reply_markup=btns, disable_web_page_preview=True)
-    except:
-        await callback.message.answer(text=text, reply_markup=btns, disable_web_page_preview=True)
+        await callback.message.edit_text(
+            text=text, reply_markup=btns, disable_web_page_preview=True, parse_mode="HTML"
+        )
+    except Exception:
+        await callback.message.answer(
+            text=text, reply_markup=btns, disable_web_page_preview=True, parse_mode="HTML"
+        )
 
 
 async def bonus_history_page_handler(
