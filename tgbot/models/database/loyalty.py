@@ -3,7 +3,7 @@ import typing
 import uuid
 
 from sqlalchemy import (Column, Integer, BigInteger, ForeignKey, Text, DateTime,
-                        func, String, Boolean, select, UUID, DECIMAL, True_, desc, asc, Date, and_)
+                        func, String, Boolean, select, UUID, DECIMAL, True_, desc, asc, Date, and_, or_)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tgbot.models.database.base import Base
@@ -108,7 +108,11 @@ class ClientBonusPoints(Base):
         ).where(
             and_(
                 ClientBonusPoints.client_id == client_id,
-                ClientBonusPoints.client_purchases_return_id.is_(None)  # Исключаем возвраты
+                ClientBonusPoints.client_purchases_return_id.is_(None),  # Исключаем возвраты
+                or_(
+                    (ClientBonusPoints.accrued_points.isnot(None)) & (ClientBonusPoints.accrued_points > 0),
+                    (ClientBonusPoints.write_off_points.isnot(None)) & (ClientBonusPoints.write_off_points > 0)
+                )
             )
         ).order_by(
             desc(ClientBonusPoints.operation_date)
@@ -128,7 +132,11 @@ class ClientBonusPoints(Base):
         stmt = select(sql_func.count()).select_from(ClientBonusPoints).where(
             and_(
                 ClientBonusPoints.client_id == client_id,
-                ClientBonusPoints.client_purchases_return_id.is_(None)  # Исключаем возвраты
+                ClientBonusPoints.client_purchases_return_id.is_(None),
+                or_(
+                    (ClientBonusPoints.accrued_points.isnot(None)) & (ClientBonusPoints.accrued_points > 0),
+                    (ClientBonusPoints.write_off_points.isnot(None)) & (ClientBonusPoints.write_off_points > 0)
+                )
             )
         )
         response = await session.execute(stmt)

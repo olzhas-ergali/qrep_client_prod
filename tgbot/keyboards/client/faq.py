@@ -20,9 +20,11 @@ async def get_faq_btns(
     n = len(faq_lvls.get(current_lvl))
     for i in range(n):
         faq_lvls.get(current_lvl)[i].get('callback')
+        original_text = faq_lvls.get(current_lvl)[i].get('text')
+        translated_text = i18n_func(original_text, locale=locale)
         markup.add(
             InlineKeyboardButton(
-                text=i18n_func(faq_lvls.get(current_lvl)[i].get('text'), locale=locale),
+                text=translated_text,
                 callback_data=FaqCallback.new(
                     chapter=i + 1,
                     lvl=faq_lvls.get(current_lvl)[i].get('callback'),
