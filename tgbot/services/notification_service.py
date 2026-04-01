@@ -105,6 +105,14 @@ class NotificationService:
             logger.info(f"Using CLIENT bot token (fallback) for user_type={user_type.value}")
 
         return token
+
+    def _get_fallback_bot_token(self, user_type: UserType) -> Optional[str]:
+        """Возвращает запасной токен, если первичный бот не видит chat_id."""
+        if user_type == UserType.STAFF:
+            return self.config.tg_bot.client_token
+        if user_type == UserType.CLIENT:
+            return self.config.tg_bot.staff_token
+        return None
     
     async def send_notification(
         self,
@@ -115,9 +123,6 @@ class NotificationService:
         parse_mode: str = "HTML"
     ) -> bool:
         """Отправляет уведомление в соответствующий бот"""
-        
-        bot_token = self._get_bot_token(user_info.user_type)
-        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         
         payload = {
             "chat_id": telegram_id,
@@ -133,22 +138,53 @@ class NotificationService:
             else:
                  payload["reply_markup"] = reply_markup
         
-        try:
+        async def _send_with_token(bot_token: str) -> tuple[bool, int, str]:
+            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, json=payload) as response:
-                    if response.status == 200:
+                    body = await response.text()
+                    return response.status == 200, response.status, body
+
+        primary_token = self._get_bot_token(user_info.user_type)
+        try:
+            ok, status, body = await _send_with_token(primary_token)
+            if ok:
+                logger.info(
+                    f"Notification sent successfully to {user_info.user_type.value} "
+                    f"user {telegram_id} (phone: {user_info.phone_number})"
+                )
+                return True
+
+            error_text = body.lower()
+            need_fallback = (
+                status == 400 and ("chat not found" in error_text or "bot was blocked by the user" in error_text)
+            )
+
+            if need_fallback:
+                fallback_token = self._get_fallback_bot_token(user_info.user_type)
+                if fallback_token and fallback_token != primary_token:
+                    logger.warning(
+                        f"Primary bot token failed for {user_info.user_type.value} user {telegram_id}, "
+                        "trying fallback token"
+                    )
+                    ok2, status2, body2 = await _send_with_token(fallback_token)
+                    if ok2:
                         logger.info(
-                            f"Notification sent successfully to {user_info.user_type.value} "
+                            f"Notification delivered with fallback token for {user_info.user_type.value} "
                             f"user {telegram_id} (phone: {user_info.phone_number})"
                         )
                         return True
-                    else:
-                        error_text = await response.text()
-                        logger.error(
-                            f"Failed to send notification to {user_info.user_type.value} "
-                            f"user {telegram_id}: {response.status} - {error_text}"
-                        )
-                        return False
+                    logger.error(
+                        f"Fallback token also failed for {user_info.user_type.value} "
+                        f"user {telegram_id}: {status2} - {body2}"
+                    )
+                    return False
+
+            logger.error(
+                f"Failed to send notification to {user_info.user_type.value} "
+                f"user {telegram_id}: {status} - {body}"
+            )
+            return False
         except Exception as e:
             logger.error(
                 f"Exception while sending notification to {user_info.user_type.value} "
