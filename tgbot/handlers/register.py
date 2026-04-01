@@ -7,14 +7,7 @@ from tgbot.keyboards import query_cb
 
 
 def register_staff(dp: Dispatcher):
-
-    dp.register_message_handler(
-        client.auth.auth_phone_handler,
-        commands=['start'],
-        state="*",
-        is_client_auth=True
-    )
-
+    # Один вход на /start для неавторизованных, чтобы исключить дубли приветствия.
     dp.register_message_handler(
         authorization.first_message_handler,
         commands=['start'],
