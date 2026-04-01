@@ -8,7 +8,7 @@ from aiogram.types.callback_query import CallbackQuery
 from aiogram.dispatcher.storage import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tgbot.models.database.users import Client, ClientReview
+from tgbot.models.database.users import Client, ClientReview, StaffReview
 from tgbot.misc.states.client import NotificationState
 from tgbot.keyboards.client.client import main_btns
 from tgbot.misc.delete import remove
@@ -47,14 +47,25 @@ async def review_handler(
         5: _('Отлично'),
     }
 
-    c = ClientReview()
-    c.client_id = user.id
-    c.client_review = "-"
-    c.client_grade = grade
-    c.client_grade_str = grades.get(grade)
-    session.add(c)
+    active_bot_type = callback_query.bot.get('active_bot_type', 'client')
+    if active_bot_type == "staff":
+        review = StaffReview()
+        review.staff_id = user.id
+        review.staff_review = "-"
+        review.staff_grade = grade
+        review.staff_grade_str = grades.get(grade)
+        review_table = "staff"
+    else:
+        review = ClientReview()
+        review.client_id = user.id
+        review.client_review = "-"
+        review.client_grade = grade
+        review.client_grade_str = grades.get(grade)
+        review_table = "client"
+
+    session.add(review)
     await session.commit()
-    await state.update_data(review_id=c.id)
+    await state.update_data(review_id=review.id, review_table=review_table)
     try:
         await callback_query.message.edit_text(text=text)
     except Exception:
@@ -71,12 +82,25 @@ async def get_client_review_handler(
     _ = message.bot.get('i18n')
     data = await state.get_data()
 
-    c = await ClientReview.get_review_by_id(
-        session=session,
-        review_id=int(data.get('review_id'))
-    )
-    c.client_review = message.text
-    session.add(c)
+    review_table = data.get('review_table', 'client')
+    review_id = int(data.get('review_id'))
+
+    if review_table == "staff":
+        review = await StaffReview.get_review_by_id(
+            session=session,
+            review_id=review_id
+        )
+        if review:
+            review.staff_review = message.text
+            session.add(review)
+    else:
+        review = await ClientReview.get_review_by_id(
+            session=session,
+            review_id=review_id
+        )
+        if review:
+            review.client_review = message.text
+            session.add(review)
     await session.commit()
     await message.delete()
     await remove(message, 1)
