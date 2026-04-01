@@ -1,3 +1,4 @@
+import logging
 import os
 import segno
 import datetime
@@ -13,6 +14,8 @@ from tgbot.keyboards.client.client import main_btns
 from tgbot.misc.delete import remove
 from tgbot.misc.state_helpers import clear_state_but_preserve_locale
 
+logger = logging.getLogger(__name__)
+
 
 async def review_handler(
         callback_query: CallbackQuery,
@@ -21,9 +24,17 @@ async def review_handler(
         session: AsyncSession,
         callback_data: dict
 ):
+    try:
+        await callback_query.answer()
+    except Exception:
+        logger.exception("[review] callback_query.answer failed")
+
     _ = callback_query.bot.get('i18n')
-    
-    await clear_state_but_preserve_locale(state)
+
+    try:
+        await clear_state_but_preserve_locale(state)
+    except Exception:
+        logger.exception("[review] clear_state failed")
 
     grade = int(callback_data.get('grade'))
     text = _("Рахмет! Расскажите, пожалуйста, почему поставили такую оценку? "
@@ -44,9 +55,11 @@ async def review_handler(
     session.add(c)
     await session.commit()
     await state.update_data(review_id=c.id)
-    await callback_query.message.edit_text(
-        text=text,
-    )
+    try:
+        await callback_query.message.edit_text(text=text)
+    except Exception:
+        logger.exception("[review] edit_text failed, sending new message")
+        await callback_query.message.answer(text=text)
     await NotificationState.waiting_review.set()
 
 
@@ -71,7 +84,7 @@ async def get_client_review_handler(
     await message.answer(
         text=_('''Спасибо за покупку! Ваши отзывы важны для улучшения нашей команды Qazaq Republic.
 В случае если ваш отзыв требует ответа, мы свяжемся с вами в ближайшее время.'''),
-        reply_markup=await main_btns()
+        reply_markup=await main_btns(_)
     )
     
     await clear_state_but_preserve_locale(state)

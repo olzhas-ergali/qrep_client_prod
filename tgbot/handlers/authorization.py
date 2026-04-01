@@ -12,6 +12,24 @@ from tgbot.handlers.client import auth as client_auth, main as client_main
 from tgbot.keyboards.auth import get_auth_btns, get_local_btns
 
 
+async def start_entry_handler(
+        message: Message,
+        user: Client,
+        state: FSMContext,
+        reg: RegTemp,
+        session: AsyncSession
+):
+
+    if isinstance(user, Client) and user.is_active:
+        return await client_main.start_handler(
+            message=message,
+            user=user,
+            state=state,
+            session=session
+        )
+    return await first_message_handler(message)
+
+
 async def first_message_handler(
         message: Message,
 ):
@@ -22,11 +40,7 @@ async def first_message_handler(
 Мен сізге кэшбэк пен басқа да мүмкіндіктер туралы ақпаратты жылдам әрі оңай алуға көмектесемін.
 
 Сәлем! Вас приветствует Qazaq Republic и ваш персональный помощник по бонусной программе QR+.
-Я помогу вам быстро получить информацию о кэшбэке и многом другом.'''
-    )
-    await message.answer(
-        text="Тілді таңдаңыз:\n"
-             "Выберите язык:",
+Я помогу вам быстро получить информацию о кэшбэке и многом другом.''',
         reply_markup=get_local_btns()
     )
 
