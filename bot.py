@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import os
 
 from aiogram import Bot, Dispatcher
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
@@ -54,7 +55,9 @@ async def main():
     else:
         storage = MemoryStorage()
 
-    bot = Bot(token=config.tg_bot.client_token, parse_mode='HTML')
+    bot_token_override = os.getenv("BOT_TOKEN_OVERRIDE", "").strip()
+    bot_token = bot_token_override or config.tg_bot.client_token
+    bot = Bot(token=bot_token, parse_mode='HTML')
     db = Database()
 
     scheduler = AsyncIOScheduler(
