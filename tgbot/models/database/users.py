@@ -178,6 +178,43 @@ class ClientReview(Base):
         return await session.scalar(stmt)
 
 
+class StaffReview(Base):
+    __tablename__ = "staff_review"
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    staff_id = Column(
+        BigInteger,
+        ForeignKey('users.id', ondelete='CASCADE', onupdate='CASCADE')
+    )
+    staff_review = Column(
+        Text
+    )
+    staff_grade = Column(
+        Integer
+    )
+    staff_grade_str = Column(
+        String
+    )
+    created_at = Column(DateTime, server_default=func.now())
+    staff = relationship(
+        'User',
+        foreign_keys=[staff_id],
+        uselist=True,
+        lazy='selectin'
+    )
+
+    @classmethod
+    async def get_review_by_id(
+            cls,
+            session: AsyncSession,
+            review_id: int
+    ) -> 'StaffReview':
+        stmt = select(StaffReview).where(
+            review_id == StaffReview.id
+        )
+
+        return await session.scalar(stmt)
+
+
 class RegTemp(Base):
     __tablename__ = "reg_temp"
     telegram_id = Column(

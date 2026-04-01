@@ -58,6 +58,7 @@ async def main():
     bot_token_override = os.getenv("BOT_TOKEN_OVERRIDE", "").strip()
     bot_token = bot_token_override or config.tg_bot.client_token
     bot = Bot(token=bot_token, parse_mode='HTML')
+    active_bot_type = "staff" if bot_token == config.tg_bot.staff_token else "client"
     db = Database()
 
     scheduler = AsyncIOScheduler(
@@ -82,6 +83,7 @@ async def main():
     bot['i18n'] = i18n.gettext
     bot['storage'] = storage
     bot['config'] = config
+    bot['active_bot_type'] = active_bot_type
     bot['pool'] = db.pool
 
     # --- ЗАПУСК DB LISTENER (ТРИГГЕРЫ) ---
