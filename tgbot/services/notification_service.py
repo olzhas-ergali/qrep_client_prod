@@ -120,7 +120,8 @@ class NotificationService:
         telegram_id: int,
         message: str,
         reply_markup: Optional[Union[Dict, Any]] = None, # Добавили поддержку кнопок
-        parse_mode: str = "HTML"
+        parse_mode: str = "HTML",
+        allow_cross_bot_fallback: bool = True
     ) -> bool:
         """Отправляет уведомление в соответствующий бот"""
         
@@ -160,7 +161,7 @@ class NotificationService:
                 status == 400 and ("chat not found" in error_text or "bot was blocked by the user" in error_text)
             )
 
-            if need_fallback:
+            if need_fallback and allow_cross_bot_fallback:
                 fallback_token = self._get_fallback_bot_token(user_info.user_type)
                 if fallback_token and fallback_token != primary_token:
                     logger.warning(
@@ -265,5 +266,8 @@ class NotificationService:
             user_info=user_info, 
             telegram_id=telegram_id, 
             message=message,
-            reply_markup=keyboard # Передаем кнопки!
+            reply_markup=keyboard, # Передаем кнопки!
+            # Для review-кнопок нужен именно client bot:
+            # callback_query обрабатывается его polling-процессом.
+            allow_cross_bot_fallback=False
         )
