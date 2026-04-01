@@ -263,8 +263,16 @@ class NotificationService:
         keyboard = await get_review_keyboard(_)
         
         # 5. Отправляем с клавиатурой
+        delivery_user_info = UserInfo(
+            user_type=UserType.CLIENT,
+            telegram_id=user_info.telegram_id,
+            phone_number=user_info.phone_number,
+            name=user_info.name,
+            user_id=user_info.user_id,
+            locale=user_info.locale,
+        )
         return await self.send_notification(
-            user_info=user_info, 
+            user_info=delivery_user_info,
             telegram_id=telegram_id, 
             message=message,
             reply_markup=keyboard, # Передаем кнопки!
