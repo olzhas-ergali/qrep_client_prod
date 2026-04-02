@@ -238,6 +238,7 @@ class NotificationService:
         """Отправляет уведомление об оценке покупки с кнопками и на нужном языке"""
 
         user_info: UserInfo
+        target_telegram_id = telegram_id
         client_by_telegram = await session.get(Client, telegram_id)
         if client_by_telegram:
             user_info = UserInfo(
@@ -248,9 +249,12 @@ class NotificationService:
                 user_id=client_by_telegram.id,
                 locale=client_by_telegram.local or 'rus'
             )
+            target_telegram_id = client_by_telegram.id
         else:
             identifier = UserIdentificationService(session)
             user_info = await identifier.identify_user(phone_number)
+            if user_info.user_type == UserType.CLIENT and user_info.user_id:
+                target_telegram_id = int(user_info.user_id)
 
         _ = self._get_translator(user_info.locale)
 
@@ -270,8 +274,9 @@ class NotificationService:
         keyboard = await get_review_keyboard(_)
 
         logger.info(
-            "Purchase review routing: telegram_id=%s user_type=%s locale=%s resolved_user_id=%s",
+            "Purchase review routing: incoming_telegram_id=%s target_telegram_id=%s user_type=%s locale=%s resolved_user_id=%s",
             telegram_id,
+            target_telegram_id,
             user_info.user_type.value,
             user_info.locale,
             user_info.user_id
@@ -279,14 +284,15 @@ class NotificationService:
 
         sent = await self.send_notification(
             user_info=user_info,
-            telegram_id=telegram_id, 
+            telegram_id=target_telegram_id,
             message=message,
             reply_markup=keyboard,
             allow_cross_bot_fallback=False
         )
         logger.info(
-            "Purchase review result: telegram_id=%s user_type=%s sent=%s",
+            "Purchase review result: incoming_telegram_id=%s target_telegram_id=%s user_type=%s sent=%s",
             telegram_id,
+            target_telegram_id,
             user_info.user_type.value,
             sent
         )
