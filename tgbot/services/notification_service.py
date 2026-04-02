@@ -236,10 +236,7 @@ class NotificationService:
         purchase_id: Optional[str] = None
     ) -> bool:
         """Отправляет уведомление об оценке покупки с кнопками и на нужном языке"""
-        
-        # 1. Определяем пользователя и его язык.
-        # Для purchase review приоритет - клиент по telegram_id:
-        # это защищает от ухода в staff fallback при неоднозначном телефоне.
+
         user_info: UserInfo
         client_by_telegram = await session.get(Client, telegram_id)
         if client_by_telegram:
@@ -254,13 +251,11 @@ class NotificationService:
         else:
             identifier = UserIdentificationService(session)
             user_info = await identifier.identify_user(phone_number)
-        
-        # 2. Получаем переводчик для этого языка
+
         _ = self._get_translator(user_info.locale)
-        
-        # 3. Формируем сообщение по ТЗ (рус.: Здравствуйте, {ФИО}! Благодарим за покупку! ... / каз.: Сәлеметсіз бе, {ФИО}! Бізді таңдағаныңыз үшін рахмет! ...)
+
         name_to_use = (user_info.name or "").strip()
-        
+
         if user_info.user_type == UserType.STAFF:
             greeting = _('Greeting_Staff').format(name=name_to_use or 'қызметкер/сотрудник')
         else:
@@ -272,15 +267,27 @@ class NotificationService:
             id_text = _('ID').format(id=purchase_id)
             message += id_text
 
-        # 4. Генерируем клавиатуру с переведенными кнопками
         keyboard = await get_review_keyboard(_)
-        
-        # 5. Отправляем с клавиатурой
-        return await self.send_notification(
+
+        logger.info(
+            "Purchase review routing: telegram_id=%s user_type=%s locale=%s resolved_user_id=%s",
+            telegram_id,
+            user_info.user_type.value,
+            user_info.locale,
+            user_info.user_id
+        )
+
+        sent = await self.send_notification(
             user_info=user_info,
             telegram_id=telegram_id, 
             message=message,
-            reply_markup=keyboard, # Передаем кнопки!
-            # Для review нужен стабильный токен по типу пользователя.
+            reply_markup=keyboard,
             allow_cross_bot_fallback=False
         )
+        logger.info(
+            "Purchase review result: telegram_id=%s user_type=%s sent=%s",
+            telegram_id,
+            user_info.user_type.value,
+            sent
+        )
+        return sent
