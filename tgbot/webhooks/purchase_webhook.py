@@ -1,15 +1,44 @@
+import asyncio
 import logging
 from typing import Optional
 
 from aiohttp import web, hdrs
 from aiohttp.web_request import Request
 from aiohttp.web_response import Response
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from tgbot.services.notification_service import NotificationService
 from tgbot.config import Config
 
 logger = logging.getLogger(__name__)
+
+
+async def _purchase_review_bg(
+    session_factory,
+    notification_service: NotificationService,
+    phone_number: str,
+    telegram_id: int,
+    purchase_id: Optional[str],
+) -> None:
+    try:
+        async with session_factory() as session:
+            ok = await notification_service.send_purchase_review_notification(
+                session=session,
+                phone_number=phone_number,
+                telegram_id=telegram_id,
+                purchase_id=purchase_id,
+            )
+            if ok:
+                logger.info(
+                    "Purchase notification sent successfully for phone: %s",
+                    phone_number,
+                )
+            else:
+                logger.error(
+                    "Failed to send purchase notification for phone: %s",
+                    phone_number,
+                )
+    except Exception:
+        logger.exception("Background purchase notification failed for phone: %s", phone_number)
 
 
 class PurchaseWebhookHandler:
@@ -75,35 +104,23 @@ class PurchaseWebhookHandler:
             
             # Опциональные поля
             purchase_id = data.get('purchase_id')
-            
-            # Создаем сессию БД
-            async with self.db_session_factory() as session:
-                # Отправляем уведомление
-                success = await self.notification_service.send_purchase_review_notification(
-                    session=session,
-                    phone_number=phone_number,
-                    telegram_id=telegram_id,
-                    purchase_id=purchase_id
+
+            asyncio.create_task(
+                _purchase_review_bg(
+                    self.db_session_factory,
+                    self.notification_service,
+                    phone_number,
+                    telegram_id,
+                    purchase_id,
                 )
-                
-                if success:
-                    logger.info(f"Purchase notification sent successfully for phone: {phone_number}")
-                    return web.json_response(
-                        {
-                            "status": "success",
-                            "message": "Notification sent successfully"
-                        },
-                        status=200
-                    )
-                else:
-                    logger.error(f"Failed to send purchase notification for phone: {phone_number}")
-                    return web.json_response(
-                        {
-                            "status": "error",
-                            "message": "Failed to send notification"
-                        },
-                        status=500
-                    )
+            )
+            return web.json_response(
+                {
+                    "status": "accepted",
+                    "message": "Notification queued",
+                },
+                status=200,
+            )
         
         except Exception as e:
             logger.error(f"Unexpected error in purchase webhook: {str(e)}")

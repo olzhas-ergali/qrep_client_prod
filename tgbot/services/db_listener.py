@@ -11,12 +11,18 @@ from tgbot.models.database.users import Client
 
 logger = logging.getLogger(__name__)
 
+# Окно объединения начислений (сек): несколько NOTIFY за одну покупку → одно сообщение
+ACCRUAL_MERGE_WINDOW_SEC = 2.5
+
+
 class DBListener:
     def __init__(self, config: Config, pool: sessionmaker):
         self.config = config
         self.session_pool = pool
         self.notification_service = NotificationService(config)
         self.db_config = config.db
+        self._pending_accruals: dict = {}
+        self._accrual_lock = asyncio.Lock()
 
     async def start(self):
         """Запускает процесс прослушивания в бесконечном цикле (с реконнектом)"""
@@ -52,60 +58,86 @@ class DBListener:
         # Обработку запускаем в фоне, чтобы не блокировать слушателя
         asyncio.create_task(self._process_event(payload))
 
+    async def _schedule_accrual_notification(
+        self, client_id: int, points: float, client: Client, user_info: UserInfo, locale: str
+    ):
+        """Объединяет несколько начислений по одному client_id в одно сообщение (устраняет дубли)."""
+        async with self._accrual_lock:
+            if client_id in self._pending_accruals:
+                entry = self._pending_accruals[client_id]
+                entry["points"] += points
+                if entry["timer"] is not None:
+                    entry["timer"].cancel()
+            else:
+                self._pending_accruals[client_id] = {
+                    "points": points,
+                    "timer": None,
+                    "locale": locale,
+                    "telegram_id": client.id,
+                    "user_info": user_info,
+                }
+            entry = self._pending_accruals[client_id]
+            loop = asyncio.get_event_loop()
+            entry["timer"] = loop.call_later(
+                ACCRUAL_MERGE_WINDOW_SEC,
+                lambda cid=client_id: asyncio.create_task(self._flush_accrual(cid)),
+            )
+
+    async def _flush_accrual(self, client_id: int):
+        """Отправляет одно сообщение о начислении."""
+        async with self._accrual_lock:
+            entry = self._pending_accruals.pop(client_id, None)
+        if not entry:
+            return
+        points = int(entry["points"])
+        locale = entry["locale"]
+        telegram_id = entry["telegram_id"]
+        user_info = entry["user_info"]
+        texts = {
+            "rus": (
+                "<b>Вам начислены новые бонусы!</b>\n"
+                f"На ваш бонусный счёт добавлено {points} бонусов за последнюю покупку.\n"
+                "Спасибо, что выбираете Qazaq Republic!"
+            ),
+            "kaz": (
+                "<b>Сізге жаңа бонус есептелді!</b>\n"
+                f"Соңғы сатып алуыңыз үшін бонус шотыңызға {points} бонус қосылды.\n"
+                "Qazaq Republic-ті таңдағаныңызға рақмет!"
+            ),
+        }
+        message_text = texts.get(locale, texts["rus"])
+        success = await self.notification_service.send_notification(
+            user_info=user_info,
+            telegram_id=telegram_id,
+            message=message_text,
+            allow_cross_bot_fallback=False,
+        )
+        if success:
+            logger.info(f"Bonus accrual notification sent to client {client_id}, total points={points}")
+        else:
+            logger.error(f"Failed to send bonus notification to client {client_id}")
+
     async def _process_event(self, raw_payload: str):
         try:
             data = json.loads(raw_payload)
             client_id = data.get('client_id')
-            points = int(float(data.get('points', 0))) # float на случай если Decimal
+            points = int(float(data.get('points', 0)))  # float на случай если Decimal
 
             if not client_id:
                 return
 
-            # Нам нужно достать данные клиента (язык, телефон)
-            # Для этого открываем сессию SQLAlchemy
             async with self.session_pool() as session:
                 client = await session.get(Client, int(client_id))
-                
                 if not client:
                     logger.warning(f"Client {client_id} not found for bonus notification")
                     return
-
-                # Определяем язык
                 locale = client.local if client.local in ['kaz', 'rus'] else 'rus'
-                
-                # Тексты уведомлений
-                texts = {
-                    'rus': (
-                        "<b>Вам начислены новые бонусы!</b>\n"
-                        f"На ваш бонусный счёт добавлено {points} бонусов за последнюю покупку.\n"
-                        "Спасибо, что выбираете Qazaq Republic!"
-                    ),
-                    'kaz': (
-                        "<b>Сізге жаңа бонус есептелді!</b>\n"
-                        f"Соңғы сатып алуыңыз үшін бонус шотыңызға {points} бонус қосылды.\n"
-                        "Qazaq Republic-ті таңдағаныңызға рақмет!"
-                    )
-                }
-
-                message_text = texts[locale]
-
-                # Отправляем
                 user_info = UserInfo(
                     user_type=UserType.CLIENT,
                     phone_number=client.phone_number,
                     locale=locale
                 )
-
-                success = await self.notification_service.send_notification(
-                    user_info=user_info,
-                    telegram_id=client.id,
-                    message=message_text
-                )
-                
-                if success:
-                    logger.info(f"Bonus notification sent to client {client.id}")
-                else:
-                    logger.error(f"Failed to send bonus notification to client {client.id}")
+                await self._schedule_accrual_notification(int(client_id), points, client, user_info, locale)
 
         except Exception as e:
             logger.exception(f"Error processing DB trigger payload: {e}")

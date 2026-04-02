@@ -1,4 +1,3 @@
-# qrep_client/tgbot/services/notification_service.py
 
 import logging
 from enum import Enum
@@ -139,9 +138,11 @@ class NotificationService:
             else:
                  payload["reply_markup"] = reply_markup
         
+        tg_timeout = aiohttp.ClientTimeout(total=12, sock_connect=5)
+
         async def _send_with_token(bot_token: str) -> tuple[bool, int, str]:
             url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(timeout=tg_timeout) as session:
                 async with session.post(url, json=payload) as response:
                     body = await response.text()
                     return response.status == 200, response.status, body
@@ -237,9 +238,27 @@ class NotificationService:
     ) -> bool:
         """Отправляет уведомление об оценке покупки с кнопками и на нужном языке"""
         
-        # 1. Определяем пользователя и его ЯЗЫК
-        identifier = UserIdentificationService(session)
-        user_info = await identifier.identify_user(phone_number)
+        # 1. Жесткий приоритет клиента:
+        #    a) клиент по telegram_id
+        #    b) клиент по телефону
+        #    c) staff fallback по телефону
+        target_telegram_id = telegram_id
+        client_by_telegram = await session.get(Client, telegram_id)
+        if client_by_telegram:
+            user_info = UserInfo(
+                user_type=UserType.CLIENT,
+                telegram_id=telegram_id,
+                phone_number=client_by_telegram.phone_number or phone_number,
+                name=client_by_telegram.name,
+                user_id=client_by_telegram.id,
+                locale=client_by_telegram.local or 'rus'
+            )
+            target_telegram_id = client_by_telegram.id
+        else:
+            identifier = UserIdentificationService(session)
+            user_info = await identifier.identify_user(phone_number)
+            if user_info.user_type == UserType.CLIENT and user_info.user_id:
+                target_telegram_id = int(user_info.user_id)
         
         # 2. Получаем переводчик для этого языка
         _ = self._get_translator(user_info.locale)
@@ -265,7 +284,7 @@ class NotificationService:
         # 5. Отправляем с клавиатурой
         return await self.send_notification(
             user_info=user_info,
-            telegram_id=telegram_id, 
+            telegram_id=target_telegram_id,
             message=message,
             reply_markup=keyboard, # Передаем кнопки!
             # Для review нужен стабильный токен по типу пользователя.

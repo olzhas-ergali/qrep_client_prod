@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from aiohttp import web
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
@@ -61,12 +62,14 @@ def main():
     logger.info("Starting webhook server...")
     
     app = asyncio.get_event_loop().run_until_complete(init_app())
+    port = int(os.getenv("WEBHOOK_PORT", "8080"))
+    logger.info("Webhook server will listen on port %s", port)
     
     # Запускаем сервер
     web.run_app(
         app,
         host='0.0.0.0',
-        port=8080,
+        port=port,
         access_log=logger
     )
 
