@@ -36,7 +36,14 @@ async def push_client_authorization(
     )
     users: typing.Optional[typing.List[RegTemp], None] = response.scalars().all()
 
+    processed_telegram_ids: set[int] = set()
+
     for u in users:
+        # Если в RegTemp есть дубли, отправляем напоминание только один раз на Telegram ID.
+        if u.telegram_id in processed_telegram_ids:
+            continue
+        processed_telegram_ids.add(u.telegram_id)
+
         # Получаем данные из JSON (чтобы достать телефон и флаг отправки)
         current_data = dict(u.state_data) if u.state_data else {}
         phone_in_temp = current_data.get('phone')
