@@ -251,10 +251,23 @@ class NotificationService:
             )
             target_telegram_id = client_by_telegram.id
         else:
-            identifier = UserIdentificationService(session)
-            user_info = await identifier.identify_user(phone_number)
-            if user_info.user_type == UserType.CLIENT and user_info.user_id:
-                target_telegram_id = int(user_info.user_id)
+            staff_by_telegram = await session.get(User, telegram_id)
+            if staff_by_telegram:
+                display_name = staff_by_telegram.login_tg or f"User_{staff_by_telegram.id}"
+                user_info = UserInfo(
+                    user_type=UserType.STAFF,
+                    telegram_id=telegram_id,
+                    phone_number=phone_number,
+                    name=display_name,
+                    user_id=staff_by_telegram.id,
+                    locale=staff_by_telegram.local or 'rus'
+                )
+                target_telegram_id = staff_by_telegram.id
+            else:
+                identifier = UserIdentificationService(session)
+                user_info = await identifier.identify_user(phone_number)
+                if user_info.user_type in (UserType.CLIENT, UserType.STAFF) and user_info.user_id:
+                    target_telegram_id = int(user_info.user_id)
 
         _ = self._get_translator(user_info.locale)
 
