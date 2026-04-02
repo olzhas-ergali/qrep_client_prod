@@ -88,28 +88,29 @@ async def main():
     bot['active_bot_type'] = active_bot_type
     bot['pool'] = db.pool
 
-    # --- ЗАПУСК DB LISTENER (ТРИГГЕРЫ) ---
-    # Создаем экземпляр слушателя и запускаем его в фоновой задаче
-    # Это обеспечит мгновенную реакцию на изменения в базе
-    db_listener = DBListener(config, db.pool)
-    asyncio.create_task(db_listener.start())
-    # -------------------------------------
+    if active_bot_type == "client":
+        # Запускаем DB listener и планировщик только в клиентском процессе.
+        # Это предотвращает дубли, когда staff-токен процесс тоже поднят.
+        db_listener = DBListener(config, db.pool)
+        asyncio.create_task(db_listener.start())
 
-    scheduler.add_job(
-        tasks.push_client_authorization,
-        'cron',
-        hour=15,
-        minute=00,
-        args=(db.pool, config, i18n.gettext)
-    )
+        scheduler.add_job(
+            tasks.push_client_authorization,
+            'cron',
+            hour=15,
+            minute=00,
+            args=(db.pool, config, i18n.gettext)
+        )
 
-    # Добавляем задачу для уведомлений об оценке качества покупок
-    scheduler.add_job(
-        tasks.push_client_answer_operator,
-        'interval',
-        minutes=5,
-        args=(db.pool, config, i18n.gettext)
-    )
+        # Добавляем задачу для уведомлений об оценке качества покупок
+        scheduler.add_job(
+            tasks.push_client_answer_operator,
+            'interval',
+            minutes=5,
+            args=(db.pool, config, i18n.gettext)
+        )
+    else:
+        logger.info("Staff bot mode: DB listener and client scheduler jobs are disabled")
 
     register_all_filters(dp)
     register_all_handlers(dp)
