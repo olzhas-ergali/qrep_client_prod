@@ -237,9 +237,23 @@ class NotificationService:
     ) -> bool:
         """Отправляет уведомление об оценке покупки с кнопками и на нужном языке"""
         
-        # 1. Определяем пользователя и его ЯЗЫК
-        identifier = UserIdentificationService(session)
-        user_info = await identifier.identify_user(phone_number)
+        # 1. Определяем пользователя и его язык.
+        # Для purchase review приоритет - клиент по telegram_id:
+        # это защищает от ухода в staff fallback при неоднозначном телефоне.
+        user_info: UserInfo
+        client_by_telegram = await session.get(Client, telegram_id)
+        if client_by_telegram:
+            user_info = UserInfo(
+                user_type=UserType.CLIENT,
+                telegram_id=telegram_id,
+                phone_number=client_by_telegram.phone_number or phone_number,
+                name=client_by_telegram.name,
+                user_id=client_by_telegram.id,
+                locale=client_by_telegram.local or 'rus'
+            )
+        else:
+            identifier = UserIdentificationService(session)
+            user_info = await identifier.identify_user(phone_number)
         
         # 2. Получаем переводчик для этого языка
         _ = self._get_translator(user_info.locale)
