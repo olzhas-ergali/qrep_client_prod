@@ -1492,7 +1492,7 @@ msgstr ""
 
 #: handlers/client/auth.py:215
 msgid "Отлично! Пожалуйста, укажите пол:"
-msgstr "Жынысыңызды көрсетуіңізді сұраймыз:"
+msgstr "Тамаша! Жынысыңызды көрсетіңіз:"
 
 #: handlers/staff/probation_period/second.py:38
 msgid ""
